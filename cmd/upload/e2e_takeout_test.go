@@ -5,12 +5,17 @@ package upload
 
 import (
 	"context"
+	"encoding/csv"
+	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/simulot/immich-go/cmd"
+	"github.com/simulot/immich-go/helpers/fileevent"
 	"github.com/simulot/immich-go/internal/fakefs"
 )
 
@@ -21,12 +26,12 @@ func simulate_upload(t *testing.T, zipList string, dateFormat string, forceMissi
 	}
 	ctx := context.Background()
 
-	//	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	serv := cmd.SharedFlags{
 		Immich:   ic,
 		LogLevel: "INFO",
-		// Jnl:    fileevent.NewRecorder(log, false),
-		// Log:    log,
+		Jnl:      fileevent.NewRecorder(log, false),
+		Log:      log,
 	}
 
 	fsOpener := func() ([]fs.FS, error) {
@@ -46,6 +51,21 @@ func simulate_upload(t *testing.T, zipList string, dateFormat string, forceMissi
 		t.Errorf("can't run the UploadCmd: %s", err)
 		return
 	}
+	os.Remove(zipList + ".csv")
+	f, err := os.Create(zipList + ".csv")
+	if err != nil {
+		t.Errorf("can't create CSV: %s", err)
+		return
+	}
+	defer f.Close()
+
+	w := csv.NewWriter(f)
+	defer w.Flush()
+	counts := app.Jnl.GetCounts()
+	w.Write([]string{"indicator", "num indicator", "count"})
+	for k, c := range counts {
+		w.Write([]string{fileevent.Code(k).String(), strconv.Itoa(k), strconv.FormatInt(c, 10)})
+	}
 }
 
 func TestPixilTakeOut(t *testing.T) {
@@ -63,7 +83,7 @@ func TestPhyl404TakeOut(t *testing.T) {
 func TestPhyl404_2TakeOut(t *testing.T) {
 	initMyEnv(t)
 
-	simulate_upload(t, myEnv["IMMICH_TESTFILES"]+"/User Files/Phy404#2/list.lst", "2006-01-02 15:04", false)
+	simulate_upload(t, myEnv["IMMICH_TESTFILES"]+"/User Files/Phyl404#2/list.lst", "2006-01-02 15:04", false)
 }
 
 func TestSteve81TakeOut(t *testing.T) {
